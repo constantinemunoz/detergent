@@ -26,7 +26,7 @@ No After Effects/Premiere/OFX plugins are required.
 - Cloak/refraction pipeline:
   - edge mask from matte gradient
   - displacement field from matte gradients + animated shimmer noise
-  - stronger distortion on edges and optional interior distortion
+  - stronger distortion on edges and optional interior distortion (supports very large pixel warps)
   - optional blur inside matte
   - optional chromatic aberration/RGB split
   - optional edge highlight
@@ -113,9 +113,32 @@ python -m cloakfx.cli \
 3. **Matte cleanup:** denoise with morphological operations, optional expand/contract, Gaussian feather.
 4. **Edge extraction:** Sobel gradient magnitude of matte gives edge-heavy mask.
 5. **Displacement field:** combines matte gradients + animated shimmer noise, weighted higher at edges.
-6. **Refraction:** remaps background UV sampling with displacement vectors.
+6. **Refraction:** remaps background UV sampling with displacement vectors, using wrap-around borders for extreme warps.
 7. **Cinematic polish:** optional blur-in-matte, chromatic aberration, and edge highlight.
 8. **Composite:** blend distorted cloak result with original background.
+
+---
+
+
+## Troubleshooting: subject is still visible
+
+If the person still appears as a normal cutout, it is usually a matte/key issue, not the refraction stage.
+
+1. Click **Invisible Preset** then **Auto Sample Key Color**.
+2. Set **Debug View = Matte** and tune:
+   - increase **Key Threshold** until the backdrop disappears
+   - increase **Key Softness** for smooth transitions
+   - adjust **Matte Blur/Feather** and **Denoise Cleanup** to remove speckle
+3. Set **Debug View = Edge Mask** and ensure the strongest values are around silhouette edges.
+4. Return to **Final Output** and keep:
+   - lower **Edge Highlight Amount** (too high makes outline obvious)
+   - moderate **Interior Distortion**
+   - stronger **Edge Distortion Boost** than interior
+
+Also verify your **background plate does not contain the subject**; otherwise no settings can make them disappear.
+
+
+For extreme cloak looks, `Displacement Amount` now represents **pixel amplitude** directly and can be pushed into the hundreds; remapping uses wrap-around borders so pixels cycle instead of clamping at edges.
 
 ---
 
