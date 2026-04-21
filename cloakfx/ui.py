@@ -122,8 +122,11 @@ class MainWindow(QMainWindow):
         color_btn.clicked.connect(self.pick_key_color)
         auto_btn = QPushButton("Auto Sample Key Color")
         auto_btn.clicked.connect(self.auto_key_color)
+        preset_btn = QPushButton("Invisible Preset")
+        preset_btn.clicked.connect(self.apply_invisible_preset)
         form.addWidget(color_btn, 3, 1)
         form.addWidget(auto_btn, 3, 2)
+        form.addWidget(preset_btn, 4, 1, 1, 2)
 
         return box
 
@@ -150,9 +153,9 @@ class MainWindow(QMainWindow):
             ("matte_expand_contract", "Matte Expand/Contract", -10, 10, self.settings.matte_expand_contract, 1.0),
             ("matte_blur", "Matte Blur/Feather", 0, 12, self.settings.matte_blur, 1.0),
             ("denoise_strength", "Denoise Cleanup", 0, 6, self.settings.denoise_strength, 1.0),
-            ("displacement_amount", "Displacement Amount", 0, 40, int(self.settings.displacement_amount), 1.0),
-            ("edge_distortion_boost", "Edge Distortion Boost", 0, 300, int(self.settings.edge_distortion_boost * 100), 0.01),
-            ("interior_distortion_amount", "Interior Distortion", 0, 200, int(self.settings.interior_distortion_amount * 100), 0.01),
+            ("displacement_amount", "Displacement Amount", 0, 600, int(self.settings.displacement_amount), 1.0),
+            ("edge_distortion_boost", "Edge Distortion Boost", 0, 600, int(self.settings.edge_distortion_boost * 100), 0.01),
+            ("interior_distortion_amount", "Interior Distortion", 0, 600, int(self.settings.interior_distortion_amount * 100), 0.01),
             ("blur_inside_matte", "Blur Inside Matte", 0, 300, int(self.settings.blur_inside_matte * 100), 0.01),
             ("edge_highlight_amount", "Edge Highlight Amount", 0, 100, int(self.settings.edge_highlight_amount * 100), 0.01),
             ("edge_width", "Edge Width", 1, 100, int(self.settings.edge_width * 10), 0.1),
@@ -211,6 +214,26 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Sampled", f"Sampled key color BGR=({b}, {g}, {r})")
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, "Auto sample failed", str(exc))
+
+
+    def apply_invisible_preset(self):
+        self.settings.key_threshold = 0.14
+        self.settings.key_softness = 0.20
+        self.settings.spill_suppression = 0.55
+        self.settings.matte_expand_contract = 0
+        self.settings.matte_blur = 4
+        self.settings.denoise_strength = 2
+        self.settings.displacement_amount = 180
+        self.settings.edge_distortion_boost = 2.5
+        self.settings.interior_distortion_amount = 1.2
+        self.settings.blur_inside_matte = 0.8
+        self.settings.edge_highlight_amount = 0.04
+        self.settings.edge_width = 4.2
+        self.settings.chromatic_aberration_amount = 0.45
+        self.settings.shimmer_amount = 0.9
+        self.settings.shimmer_speed = 1.2
+        self.settings.blend_with_original = 1.0
+        QMessageBox.information(self, "Preset applied", "Applied recommended 'Invisible' starting values. Re-run preview, then tune Key Threshold/Softness until the Matte view cleanly isolates the subject.")
 
     def _validate_paths(self) -> tuple[str, str, str] | None:
         bg = self.bg_edit.text().strip()
