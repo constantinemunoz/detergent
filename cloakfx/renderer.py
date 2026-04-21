@@ -20,26 +20,39 @@ def process_frame(bg: np.ndarray, fg: np.ndarray, t_sec: float, settings: Effect
     spill_fixed = suppress_spill(fg, matte, settings)
     keyed = keyed_foreground(spill_fixed, matte)
 
+    # Two-layer refraction: subtle in interior, stronger on the edges.
     dx, dy, flow_vis = build_displacement(matte, edge, t_sec, settings)
-    distorted = remap_bgr(bg, dx, dy)
+    refract_strong = remap_bgr(bg, dx, dy)
+    refract_soft = remap_bgr(bg, dx * 0.35, dy * 0.35)
+    edge_mix = np.clip(edge[..., None], 0.0, 1.0)
+    refracted = (refract_soft.astype(np.float32) * (1.0 - edge_mix) + refract_strong.astype(np.float32) * edge_mix).astype(np.uint8)
 
     if settings.blur_inside_matte > 0:
         blur_amount = int(max(1, round(settings.blur_inside_matte * 3)))
         k = blur_amount * 2 + 1
-        blurred = cv2.GaussianBlur(distorted, (k, k), sigmaX=0)
-        alpha = np.clip((matte * 0.7 + edge * 0.3)[..., None], 0, 1)
-        distorted = (distorted.astype(np.float32) * (1 - alpha) + blurred.astype(np.float32) * alpha).astype(np.uint8)
+        blurred = cv2.GaussianBlur(refracted, (k, k), sigmaX=0)
+        alpha = np.clip((matte * 0.8 + edge * 0.2)[..., None], 0, 1)
+        refracted = (refracted.astype(np.float32) * (1 - alpha) + blurred.astype(np.float32) * alpha).astype(np.uint8)
 
-    distorted = apply_chromatic_aberration(distorted, dx, dy, settings.chromatic_aberration_amount, matte)
+    refracted = apply_chromatic_aberration(refracted, dx, dy, settings.chromatic_aberration_amount, np.clip(matte * 0.5 + edge * 0.5, 0, 1))
 
-    highlight = np.zeros_like(bg, dtype=np.float32)
-    highlight[..., 1] = 190
-    highlight[..., 0] = 70
-    highlight[..., 2] = 120
-    highlighted = np.clip(distorted.astype(np.float32) + highlight * (edge[..., None] * settings.edge_highlight_amount), 0, 255).astype(np.uint8)
+    # Only replace pixels inside the matte region, keeping scene untouched elsewhere.
+    cloak_alpha = np.clip((matte * 0.65 + edge * 0.75)[..., None], 0.0, 1.0)
+    cloaked_region = (bg.astype(np.float32) * (1.0 - cloak_alpha) + refracted.astype(np.float32) * cloak_alpha).astype(np.uint8)
+
+    if settings.edge_highlight_amount > 0:
+        highlight = np.zeros_like(bg, dtype=np.float32)
+        highlight[..., 1] = 165
+        highlight[..., 0] = 55
+        highlight[..., 2] = 95
+        cloaked_region = np.clip(
+            cloaked_region.astype(np.float32) + highlight * (edge[..., None] * settings.edge_highlight_amount),
+            0,
+            255,
+        ).astype(np.uint8)
 
     blend = float(np.clip(settings.blend_with_original, 0, 1))
-    cloaked = cv2.addWeighted(bg, 1.0 - blend, highlighted, blend, 0)
+    final = cv2.addWeighted(bg, 1.0 - blend, cloaked_region, blend, 0)
 
     dv = settings.debug_view
     if dv == "Foreground":
@@ -54,7 +67,7 @@ def process_frame(bg: np.ndarray, fg: np.ndarray, t_sec: float, settings: Effect
         return cv2.cvtColor(edge_v, cv2.COLOR_GRAY2BGR)
     if dv == "Displacement Field":
         return flow_vis
-    return cloaked
+    return final
 
 
 def render_video(
@@ -96,7 +109,6 @@ def preview_frame(bg_path: str, fg_path: str, settings: EffectSettings, frame_id
 
 
 def auto_key_color_from_videos(bg_path: str, fg_path: str) -> tuple[int, int, int]:
-    # bg_path kept for signature symmetry/future use.
     _ = bg_path
     from .chroma import auto_sample_key_color
 
